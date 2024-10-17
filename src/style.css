@@ -35,6 +35,12 @@ h1 {
   line-height: 1.1;
 }
 
+canvas {
+  border: solid 4px rgb(0, 0, 0);
+  border-radius: 10px;
+  filter: drop-shadow(0 0 0.45rem rgb(220, 20, 157));
+}
+
 #app {
   max-width: 1280px;
   margin: 0 auto;
