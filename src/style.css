@@ -39,6 +39,7 @@ canvas {
   border: solid 4px rgb(0, 0, 0);
   border-radius: 10px;
   filter: drop-shadow(0 0 0.45rem rgb(220, 20, 157));
+  background-color: white;
 }
 
 #app {
