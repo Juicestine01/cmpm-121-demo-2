@@ -21,6 +21,7 @@ app.append(canvas)
 
 const lines: Array<Array<{x: number, y: number}>> = [];
 let currentLine = null;
+const redoStack: Array<Array<{x: number, y: number}>> = [];
 
 const cursor = { isDrawing: false, x: 0, y: 0 }
 
@@ -31,7 +32,11 @@ canvas.addEventListener("mousedown", (e) => {
 
     currentLine = [];
     currentLine.push({ x: cursor.x, y: cursor.y });
+    redoStack.splice(0, redoStack.length)
     lines.push(currentLine);
+
+    const event = new CustomEvent("drawing-changed");
+    canvas.dispatchEvent(event);
 });
 
 canvas.addEventListener("mousemove", (e) => {
@@ -53,6 +58,9 @@ canvas.addEventListener("mousemove", (e) => {
 canvas.addEventListener("mouseup", (_e) => {
     cursor.isDrawing = false;
     currentLine = null;
+
+    const event = new CustomEvent("drawing-changed");
+    canvas.dispatchEvent(event);
 });
 
 const clearButton = document.createElement("button");
@@ -60,8 +68,9 @@ clearButton.innerHTML = "clear"
 app.append(clearButton);
 clearButton.addEventListener("click", () => {
     if (ctx != null) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        lines.length = 0;
+        lines.splice(0, lines.length);
+        const event = new CustomEvent("drawing-changed");
+        canvas.dispatchEvent(event);
     }
 });
 
@@ -78,8 +87,31 @@ canvas.addEventListener("drawing-changed", () => {
                 }
                 ctx.stroke();
                 ctx.closePath();
-                console.log(lines)
             }
         }
+    }
+});
+
+const undoButton = document.createElement("button");
+undoButton.innerHTML = "undo"
+app.append(undoButton);
+undoButton.addEventListener("click", () => {
+    const lastLine = lines.pop();
+    if (lastLine) {
+        redoStack.push(lastLine);
+        const event = new CustomEvent("drawing-changed");
+        canvas.dispatchEvent(event);
+    }
+});
+
+const redoButton = document.createElement("button");
+redoButton.innerHTML = "redo"
+app.append(redoButton);
+redoButton.addEventListener("click", () => {
+    const lastRedo = redoStack.pop();
+    if (lastRedo) { 
+        lines.push(lastRedo);
+        const event = new CustomEvent("drawing-changed");
+        canvas.dispatchEvent(event);
     }
 });
