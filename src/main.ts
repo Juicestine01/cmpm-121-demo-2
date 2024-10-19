@@ -29,9 +29,11 @@ interface Displayable {
 
 class lineOrPoint implements Displayable {
     points: Array<{ x: number, y: number }>;
+    lineThickness: number;
 
-    constructor(points: Array<{ x: number, y: number }> = []) {
+    constructor(points: Array<{ x: number, y: number }> = [], lineThickness: number) {
         this.points = points;
+        this.lineThickness = lineThickness
     }
 
     addPoint(x: number, y: number) {
@@ -41,6 +43,7 @@ class lineOrPoint implements Displayable {
     display(ctx: CanvasRenderingContext2D) {
         if (this.points.length > 1) {
             ctx.beginPath();
+            ctx.lineWidth = this.lineThickness
             ctx.moveTo(this.points[0].x, this.points[0].y);
             for (let i = 1; i < this.points.length; i++) {
                 ctx.lineTo(this.points[i].x, this.points[i].y);
@@ -59,7 +62,7 @@ canvas.addEventListener("mousedown", (e) => {
     cursor.y = e.offsetY;
     cursor.isDrawing = true;
 
-    currentLine = new lineOrPoint;
+    currentLine = new lineOrPoint([], thickOrThin.getThickness());
     currentLine.addPoint(cursor.x, cursor.y );
     redoStack.splice(0, redoStack.length)
     lines.push(currentLine);
@@ -135,4 +138,37 @@ redoButton.addEventListener("click", () => {
         const event = new CustomEvent("drawing-changed");
         canvas.dispatchEvent(event);
     }
+});
+
+class thickness {
+
+    lineThickness: number = 0;
+
+    constructor(lineThickness: number) {
+        this.lineThickness = lineThickness
+    }
+
+    setThickness(newThickness: number) {
+        this.lineThickness = newThickness
+    }
+
+    getThickness(): number {
+        return this.lineThickness
+    }
+}
+
+let thickOrThin = new thickness(3)
+
+const thickButton = document.createElement("button");
+thickButton.innerHTML = "thick"
+app.append(thickButton)
+thickButton.addEventListener("click", () => {
+    thickOrThin.setThickness(8)
+});
+
+const thinButton = document.createElement("button");
+thinButton.innerHTML = "thin"
+app.append(thinButton)
+thinButton.addEventListener("click", () => {
+    thickOrThin.setThickness(1)
 });
