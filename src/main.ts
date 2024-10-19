@@ -19,9 +19,38 @@ const ctx = canvas.getContext("2d");
 
 app.append(canvas)
 
-const lines: Array<Array<{x: number, y: number}>> = [];
-let currentLine = null;
-const redoStack: Array<Array<{x: number, y: number}>> = [];
+const lines: Array<Displayable> = [];
+let currentLine: lineOrPoint| null = null;
+const redoStack: Array<Displayable> = [];
+
+interface Displayable {
+    display(ctx: CanvasRenderingContext2D): void;
+}
+
+class lineOrPoint implements Displayable {
+    points: Array<{ x: number, y: number }>;
+
+    constructor(points: Array<{ x: number, y: number }> = []) {
+        this.points = points;
+    }
+
+    addPoint(x: number, y: number) {
+        this.points.push({ x, y });
+    }
+
+    display(ctx: CanvasRenderingContext2D) {
+        if (this.points.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(this.points[0].x, this.points[0].y);
+            for (let i = 1; i < this.points.length; i++) {
+                ctx.lineTo(this.points[i].x, this.points[i].y);
+            }
+            ctx.stroke();
+            ctx.closePath();
+        }
+    }
+}
+
 
 const cursor = { isDrawing: false, x: 0, y: 0 }
 
@@ -30,8 +59,8 @@ canvas.addEventListener("mousedown", (e) => {
     cursor.y = e.offsetY;
     cursor.isDrawing = true;
 
-    currentLine = [];
-    currentLine.push({ x: cursor.x, y: cursor.y });
+    currentLine = new lineOrPoint;
+    currentLine.addPoint(cursor.x, cursor.y );
     redoStack.splice(0, redoStack.length)
     lines.push(currentLine);
 
@@ -48,7 +77,7 @@ canvas.addEventListener("mousemove", (e) => {
         ctx.closePath();
         cursor.x = e.offsetX;
         cursor.y = e.offsetY;
-        currentLine.push({ x: cursor.x, y: cursor.y });
+        currentLine?.addPoint(cursor.x, cursor.y);
 
         const event = new CustomEvent("drawing-changed");
         canvas.dispatchEvent(event);
@@ -79,15 +108,7 @@ canvas.addEventListener("drawing-changed", () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         for (const line of lines) {
-            if (line.length > 1) {
-                ctx.beginPath();
-                ctx.moveTo(line[0].x, line[0].y);
-                for (let i = 1; i < line.length; i++) {
-                    ctx.lineTo(line[i].x, line[i].y);
-                }
-                ctx.stroke();
-                ctx.closePath();
-            }
+            line.display(ctx)
         }
     }
 });
