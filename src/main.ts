@@ -5,7 +5,7 @@ const APP_TITLE = "Canvas Game";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
 const title = document.createElement("h1");
-title.innerHTML = APP_TITLE
+title.innerHTML = APP_TITLE;
 
 document.title = APP_NAME;
 app.innerHTML = APP_NAME;
@@ -17,10 +17,11 @@ canvas.width = 256;
 canvas.height = 256;
 const ctx = canvas.getContext("2d");
 
-app.append(canvas)
+app.append(canvas);
 
 const lines: Array<Displayable> = [];
-let currentLine: lineOrPoint| null = null;
+let currentLine: lineOrPoint | null = null;
+let toolPreview: ToolPreview | null = null;
 const redoStack: Array<Displayable> = [];
 
 interface Displayable {
@@ -33,7 +34,7 @@ class lineOrPoint implements Displayable {
 
     constructor(points: Array<{ x: number, y: number }> = [], lineThickness: number) {
         this.points = points;
-        this.lineThickness = lineThickness
+        this.lineThickness = lineThickness;
     }
 
     addPoint(x: number, y: number) {
@@ -43,7 +44,7 @@ class lineOrPoint implements Displayable {
     display(ctx: CanvasRenderingContext2D) {
         if (this.points.length > 1) {
             ctx.beginPath();
-            ctx.lineWidth = this.lineThickness
+            ctx.lineWidth = this.lineThickness;
             ctx.moveTo(this.points[0].x, this.points[0].y);
             for (let i = 1; i < this.points.length; i++) {
                 ctx.lineTo(this.points[i].x, this.points[i].y);
@@ -54,8 +55,38 @@ class lineOrPoint implements Displayable {
     }
 }
 
+// Tool Preview class to render a circle at the mouse location
+class ToolPreview implements Displayable {
+    x: number;
+    y: number;
+    radius: number;
 
-const cursor = { isDrawing: false, x: 0, y: 0 }
+    constructor(x: number, y: number, radius: number) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+    }
+
+    setPosition(x: number, y: number) {
+        this.x = x;
+        this.y = y;
+    }
+
+    setRadius(radius: number) {
+        this.radius = radius;
+    }
+
+    display(ctx: CanvasRenderingContext2D) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.closePath();
+    }
+}
+
+const cursor = { isDrawing: false, x: 0, y: 0 };
 
 canvas.addEventListener("mousedown", (e) => {
     cursor.x = e.offsetX;
@@ -63,8 +94,8 @@ canvas.addEventListener("mousedown", (e) => {
     cursor.isDrawing = true;
 
     currentLine = new lineOrPoint([], thickOrThin.getThickness());
-    currentLine.addPoint(cursor.x, cursor.y );
-    redoStack.splice(0, redoStack.length)
+    currentLine.addPoint(cursor.x, cursor.y);
+    redoStack.splice(0, redoStack.length);
     lines.push(currentLine);
 
     const event = new CustomEvent("drawing-changed");
@@ -72,17 +103,30 @@ canvas.addEventListener("mousedown", (e) => {
 });
 
 canvas.addEventListener("mousemove", (e) => {
+    const x = e.offsetX;
+    const y = e.offsetY;
+
     if (cursor.isDrawing && ctx != null) {
         ctx.beginPath();
         ctx.moveTo(cursor.x, cursor.y);
-        ctx.lineTo(e.offsetX, e.offsetY);
+        ctx.lineTo(x, y);
         ctx.stroke();
         ctx.closePath();
-        cursor.x = e.offsetX;
-        cursor.y = e.offsetY;
+        cursor.x = x;
+        cursor.y = y;
         currentLine?.addPoint(cursor.x, cursor.y);
 
         const event = new CustomEvent("drawing-changed");
+        canvas.dispatchEvent(event);
+    } else {
+        // Update tool preview position and fire the event
+        if (!toolPreview) {
+            toolPreview = new ToolPreview(x, y, thickOrThin.getThickness() / 2);
+        } else {
+            toolPreview.setPosition(x, y);
+            toolPreview.setRadius(thickOrThin.getThickness() / 2);
+        }
+        const event = new CustomEvent("tool-moved");
         canvas.dispatchEvent(event);
     }
 });
@@ -91,12 +135,14 @@ canvas.addEventListener("mouseup", (_e) => {
     cursor.isDrawing = false;
     currentLine = null;
 
+    thickOrThin.resetToDefault();
+
     const event = new CustomEvent("drawing-changed");
     canvas.dispatchEvent(event);
 });
 
 const clearButton = document.createElement("button");
-clearButton.innerHTML = "clear"
+clearButton.innerHTML = "clear";
 app.append(clearButton);
 clearButton.addEventListener("click", () => {
     if (ctx != null) {
@@ -111,13 +157,29 @@ canvas.addEventListener("drawing-changed", () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         for (const line of lines) {
-            line.display(ctx)
+            line.display(ctx);
+        }
+
+        if (!cursor.isDrawing && toolPreview) {
+            toolPreview.display(ctx);
         }
     }
 });
 
+canvas.addEventListener("tool-moved", () => {
+    if (ctx != null && !cursor.isDrawing && toolPreview) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (const line of lines) {
+            line.display(ctx);
+        }
+
+        toolPreview.display(ctx);
+    }
+});
+
 const undoButton = document.createElement("button");
-undoButton.innerHTML = "undo"
+undoButton.innerHTML = "undo";
 app.append(undoButton);
 undoButton.addEventListener("click", () => {
     const lastLine = lines.pop();
@@ -129,11 +191,11 @@ undoButton.addEventListener("click", () => {
 });
 
 const redoButton = document.createElement("button");
-redoButton.innerHTML = "redo"
+redoButton.innerHTML = "redo";
 app.append(redoButton);
 redoButton.addEventListener("click", () => {
     const lastRedo = redoStack.pop();
-    if (lastRedo) { 
+    if (lastRedo) {
         lines.push(lastRedo);
         const event = new CustomEvent("drawing-changed");
         canvas.dispatchEvent(event);
@@ -141,34 +203,39 @@ redoButton.addEventListener("click", () => {
 });
 
 class thickness {
+    lineThickness: number;
+    defaultThickness: number;
 
-    lineThickness: number = 0;
-
-    constructor(lineThickness: number) {
-        this.lineThickness = lineThickness
+    constructor(defaultThickness: number) {
+        this.lineThickness = defaultThickness;
+        this.defaultThickness = defaultThickness;
     }
 
     setThickness(newThickness: number) {
-        this.lineThickness = newThickness
+        this.lineThickness = newThickness;
     }
 
     getThickness(): number {
-        return this.lineThickness
+        return this.lineThickness;
+    }
+
+    resetToDefault() {
+        this.lineThickness = this.defaultThickness;
     }
 }
 
-let thickOrThin = new thickness(3)
+let thickOrThin = new thickness(3);
 
 const thickButton = document.createElement("button");
-thickButton.innerHTML = "thick"
-app.append(thickButton)
+thickButton.innerHTML = "thick";
+app.append(thickButton);
 thickButton.addEventListener("click", () => {
-    thickOrThin.setThickness(8)
+    thickOrThin.setThickness(8);
 });
 
 const thinButton = document.createElement("button");
-thinButton.innerHTML = "thin"
-app.append(thinButton)
+thinButton.innerHTML = "thin";
+app.append(thinButton);
 thinButton.addEventListener("click", () => {
-    thickOrThin.setThickness(1)
+    thickOrThin.setThickness(1);
 });
