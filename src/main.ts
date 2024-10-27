@@ -295,6 +295,41 @@ new Button("Custom", () => {
     canvas.dispatchEvent(event);
 })
 
+new Button("Export", () => {
+    const temp = document.createElement("canvas") as HTMLCanvasElement;
+    temp.width = 1024;
+    temp.height = 1024;
+    const tempCtx = temp.getContext("2d");
+
+    if (tempCtx) {
+        tempCtx.fillStyle = "white";
+        tempCtx.fillRect(0, 0, temp.width, temp.height);
+
+        const scale = temp.width / canvas.width;
+        tempCtx.scale(scale, scale);
+
+        for (const line of lines) {
+            line.display(tempCtx);
+        }
+
+        tempCtx.shadowBlur = 45 * scale;
+        tempCtx.shadowColor = "rgb(220, 20, 157)";
+        tempCtx.shadowOffsetX = 0;
+        tempCtx.shadowOffsetY = 0;
+
+        tempCtx.scale(1 / scale, 1 / scale);
+        tempCtx.lineWidth = 4 * scale;       
+        tempCtx.strokeStyle = "rgb(0, 0, 0)";
+        tempCtx.strokeRect(0, 0, temp.width, temp.height);
+
+        const downloadLink = document.createElement("a");
+        const dataURL = temp.toDataURL("image/png");
+        downloadLink.href = dataURL;
+        downloadLink.download = "canvas_drawing.png";
+        downloadLink.click();
+    }
+});
+
 stickers.forEach((sticker) => {
     new Button(sticker, () => {
         toolPreview = null; // Clear any existing line preview
