@@ -27,6 +27,7 @@ const redoStack: Array<Displayable> = [];
 let activeSticker: StickerPreview | null = null;
 let stickerOffset = { x: 0, y: 0 };
 
+
 interface Displayable {
     display(ctx: CanvasRenderingContext2D): void;
 }
@@ -280,6 +281,20 @@ new Button("thin", () => thickOrThin.setThickness(1));
 
 // Stickers array and buttons
 const stickers = ["🫃", "🍔", "🌭"];
+
+new Button("Custom", () => {
+    const text = prompt("Custom sticker here", "😼")
+    if (text != null) {
+        stickers.push(text)
+    }
+    const customEmoji = stickers.slice(-1).pop() || "😼"
+    toolPreview = null;
+    stickerPreview = new StickerPreview(cursor.x, cursor.y, customEmoji);
+
+    const event = new CustomEvent("tool-moved");
+    canvas.dispatchEvent(event);
+})
+
 stickers.forEach((sticker) => {
     new Button(sticker, () => {
         toolPreview = null; // Clear any existing line preview
