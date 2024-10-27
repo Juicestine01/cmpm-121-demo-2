@@ -22,10 +22,10 @@ app.append(canvas);
 const lines: Array<Displayable> = [];
 let currentLine: lineOrPoint | null = null;
 let toolPreview: ToolPreview | null = null;
-let stickerPreview: StickerPreview | null = null; // New sticker preview
+let stickerPreview: StickerPreview | null = null; 
 const redoStack: Array<Displayable> = [];
 let activeSticker: StickerPreview | null = null;
-let stickerOffset = { x: 0, y: 0 };
+const stickerOffset = { x: 0, y: 0 };
 
 
 interface Displayable {
@@ -59,7 +59,6 @@ class lineOrPoint implements Displayable {
     }
 }
 
-// Tool Preview class to render a circle at the mouse location
 class ToolPreview implements Displayable {
     x: number;
     y: number;
@@ -73,7 +72,7 @@ class ToolPreview implements Displayable {
 
     setPosition(x: number, y: number) {
         this.x = x;
-        this.y = y;
+        this.y = y - 5;
     }
 
     setRadius(radius: number) {
@@ -90,18 +89,29 @@ class ToolPreview implements Displayable {
     }
 }
 
-// Sticker preview class to render an emoji at the mouse location
+
+
+function getRandomRotation(): number {
+    return (Math.random() - 0.5) * Math.PI; 
+}
+
 class StickerPreview extends ToolPreview {
     emoji: string;
+    rotation: number; 
 
-    constructor(x: number, y: number, emoji: string) {
-        super(x, y, 15); // default radius for stickers
+    constructor(x: number, y: number, emoji: string, rotation: number = 0) {
+        super(x, y, 15);
         this.emoji = emoji;
+        this.rotation = rotation;
     }
 
     override display(ctx: CanvasRenderingContext2D) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
         ctx.font = "30px Arial";
-        ctx.fillText(this.emoji, this.x - 15, this.y + 10);
+        ctx.fillText(this.emoji, -15, -5); 
+        ctx.restore();
     }
 }
 
@@ -111,14 +121,12 @@ canvas.addEventListener("mousedown", (e) => {
     cursor.x = e.offsetX;
     cursor.y = e.offsetY;
 
-    // Check if clicking on a sticker
     for (const line of lines) {
         if (line instanceof StickerPreview) {
             const dist = Math.sqrt((line.x - cursor.x) ** 2 + (line.y - cursor.y) ** 2);
-            if (dist < line.radius) { // Assuming radius represents the clickable area
+            if (dist < line.radius) { 
                 activeSticker = line;
-                
-                // Calculate offset between cursor and sticker center
+
                 stickerOffset.x = cursor.x - line.x;
                 stickerOffset.y = cursor.y - line.y;
                 return;
@@ -126,19 +134,16 @@ canvas.addEventListener("mousedown", (e) => {
         }
     }
 
-    // If no sticker is selected, proceed with other drawing or placing new stickers
     if (stickerPreview) {
-        // Place the sticker if stickerPreview is active
-        const placedSticker = new StickerPreview(cursor.x, cursor.y, stickerPreview.emoji);
+        const placedSticker = new StickerPreview(cursor.x, cursor.y, stickerPreview.emoji, stickerPreview.rotation);
         lines.push(placedSticker);
         stickerPreview = null;
-        
+
         const event = new CustomEvent("drawing-changed");
         canvas.dispatchEvent(event);
         return;
     }
 
-    // Standard line drawing behavior
     cursor.isDrawing = true;
     currentLine = new lineOrPoint([], thickOrThin.getThickness());
     currentLine.addPoint(cursor.x, cursor.y);
@@ -148,6 +153,7 @@ canvas.addEventListener("mousedown", (e) => {
     const event = new CustomEvent("drawing-changed");
     canvas.dispatchEvent(event);
 });
+
 
 canvas.addEventListener("mousemove", (e) => {
     const x = e.offsetX;
@@ -166,15 +172,12 @@ canvas.addEventListener("mousemove", (e) => {
         const event = new CustomEvent("drawing-changed");
         canvas.dispatchEvent(event);
     } else if (activeSticker) {
-        // Update active sticker position with offset to keep it at the cursor tip
         activeSticker.x = x - stickerOffset.x;
         activeSticker.y = y - stickerOffset.y;
 
-        // Trigger canvas update for live repositioning preview
         const event = new CustomEvent("drawing-changed");
         canvas.dispatchEvent(event);
     } else {
-        // Update tool or sticker preview position and fire the event
         if (stickerPreview) {
             stickerPreview.setPosition(x, y);
         } else if (!toolPreview) {
@@ -191,7 +194,7 @@ canvas.addEventListener("mousemove", (e) => {
 canvas.addEventListener("mouseup", (_e) => {
     cursor.isDrawing = false;
     currentLine = null;
-    activeSticker = null; // Reset active sticker after drag
+    activeSticker = null;
 
     thickOrThin.resetToDefault();
 
@@ -204,14 +207,13 @@ canvas.addEventListener("drawing-changed", () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         for (const line of lines) {
-            // Check if the line is a StickerPreview instance to access x and y properties
             if (line instanceof StickerPreview && line === activeSticker) {
-                ctx.save(); // Save the context state
-                ctx.translate(line.x, line.y); // Move context to the sticker's new position
-                line.display(ctx); // Display the sticker at the translated position
-                ctx.restore(); // Restore context to its original state
+                ctx.save(); 
+                ctx.translate(line.x, line.y); 
+                line.display(ctx); 
+                ctx.restore(); 
             } else {
-                line.display(ctx); // Draw other elements normally
+                line.display(ctx); 
             }
         }
 
@@ -237,7 +239,6 @@ canvas.addEventListener("tool-moved", () => {
     }
 });
 
-// Button class for consistent button creation
 class Button {
     element: HTMLButtonElement;
 
@@ -249,7 +250,6 @@ class Button {
     }
 }
 
-// Clear, undo, and redo buttons
 new Button("clear", () => {
     if (ctx != null) {
         lines.splice(0, lines.length);
@@ -279,21 +279,21 @@ new Button("redo", () => {
 new Button("thick", () => thickOrThin.setThickness(8));
 new Button("thin", () => thickOrThin.setThickness(1));
 
-// Stickers array and buttons
 const stickers = ["🫃", "🍔", "🌭"];
 
 new Button("Custom", () => {
-    const text = prompt("Custom sticker here", "😼")
+    const text = prompt("Custom sticker here", "😼");
     if (text != null) {
-        stickers.push(text)
+        stickers.push(text);
     }
-    const customEmoji = stickers.slice(-1).pop() || "😼"
+    const customEmoji = stickers.slice(-1).pop() || "😼";
+    const rotation = getRandomRotation();
     toolPreview = null;
-    stickerPreview = new StickerPreview(cursor.x, cursor.y, customEmoji);
+    stickerPreview = new StickerPreview(cursor.x, cursor.y, customEmoji, rotation);
 
     const event = new CustomEvent("tool-moved");
     canvas.dispatchEvent(event);
-})
+});
 
 new Button("Export", () => {
     const temp = document.createElement("canvas") as HTMLCanvasElement;
@@ -332,15 +332,15 @@ new Button("Export", () => {
 
 stickers.forEach((sticker) => {
     new Button(sticker, () => {
-        toolPreview = null; // Clear any existing line preview
-        stickerPreview = new StickerPreview(cursor.x, cursor.y, sticker);
+        const rotation = getRandomRotation();
+        toolPreview = null;
+        stickerPreview = new StickerPreview(cursor.x, cursor.y, sticker, rotation);
 
         const event = new CustomEvent("tool-moved");
         canvas.dispatchEvent(event);
     });
 });
 
-// Line thickness management class
 class thickness {
     lineThickness: number;
     defaultThickness: number;
@@ -363,4 +363,4 @@ class thickness {
     }
 }
 
-let thickOrThin = new thickness(3);
+const thickOrThin = new thickness(3);
