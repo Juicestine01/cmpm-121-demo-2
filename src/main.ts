@@ -252,7 +252,9 @@ class Button {
 
 new Button("clear", () => {
     if (ctx != null) {
-        lines.splice(0, lines.length);
+        while (lines.length > 0) {
+            redoStack.push(lines.pop()!); 
+        }
         const event = new CustomEvent("drawing-changed");
         canvas.dispatchEvent(event);
     }
