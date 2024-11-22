@@ -19,13 +19,21 @@ const ctx = canvas.getContext("2d");
 
 app.append(canvas);
 
-const lines: Array<Displayable> = [];
-let currentLine: lineOrPoint | null = null;
-let toolPreview: ToolPreview | null = null;
-let stickerPreview: StickerPreview | null = null; 
-const redoStack: Array<Displayable> = [];
-let activeSticker: StickerPreview | null = null;
-const stickerOffset = { x: 0, y: 0 };
+function dispatchCanvasEvent(eventName: string) {
+    canvas.dispatchEvent(new Event(eventName));
+  }
+
+const state = {
+    lines: [] as Displayable[],
+    redoStack: [] as Displayable[],
+    cursor: { isDrawing: false, x: 0, y: 0 },
+    currentLine: null as lineOrPoint | null,
+    toolPreview: null as ToolPreview | null,
+    stickerPreview: null as StickerPreview | null,
+    activeSticker: null as StickerPreview | null,
+    stickerOffset: { x: 0, y: 0 },
+  };
+  
 
 
 interface Displayable {
@@ -115,43 +123,40 @@ class StickerPreview extends ToolPreview {
     }
 }
 
-const cursor = { isDrawing: false, x: 0, y: 0 };
 
 canvas.addEventListener("mousedown", (e) => {
-    cursor.x = e.offsetX;
-    cursor.y = e.offsetY;
+    state.cursor.x = e.offsetX;
+    state.cursor.y = e.offsetY;
 
-    for (const line of lines) {
+    for (const line of state.lines) {
         if (line instanceof StickerPreview) {
-            const dist = Math.sqrt((line.x - cursor.x) ** 2 + (line.y - cursor.y) ** 2);
+            const dist = Math.sqrt((line.x - state.cursor.x) ** 2 + (line.y - state.cursor.y) ** 2);
             if (dist < line.radius) { 
-                activeSticker = line;
+                state.activeSticker = line;
 
-                stickerOffset.x = cursor.x - line.x;
-                stickerOffset.y = cursor.y - line.y;
+                state.stickerOffset.x = state.cursor.x - line.x;
+                state.stickerOffset.y = state.cursor.y - line.y;
                 return;
             }
         }
     }
 
-    if (stickerPreview) {
-        const placedSticker = new StickerPreview(cursor.x, cursor.y, stickerPreview.emoji, stickerPreview.rotation);
-        lines.push(placedSticker);
-        stickerPreview = null;
+    if (state.stickerPreview) {
+        const placedSticker = new StickerPreview(state.cursor.x, state.cursor.y, state.stickerPreview.emoji, state.stickerPreview.rotation);
+        state.lines.push(placedSticker);
+        state.stickerPreview = null;
 
-        const event = new CustomEvent("drawing-changed");
-        canvas.dispatchEvent(event);
+        dispatchCanvasEvent("drawing-changed");
         return;
     }
 
-    cursor.isDrawing = true;
-    currentLine = new lineOrPoint([], thickOrThin.getThickness());
-    currentLine.addPoint(cursor.x, cursor.y);
-    redoStack.splice(0, redoStack.length);
-    lines.push(currentLine);
+    state.cursor.isDrawing = true;
+    state.currentLine = new lineOrPoint([], thickOrThin.getThickness());
+    state.currentLine.addPoint(state.cursor.x, state.cursor.y);
+    state.redoStack.splice(0, state.redoStack.length);
+    state.lines.push(state.currentLine);
 
-    const event = new CustomEvent("drawing-changed");
-    canvas.dispatchEvent(event);
+    dispatchCanvasEvent("drawing-changed");
 });
 
 
@@ -159,55 +164,49 @@ canvas.addEventListener("mousemove", (e) => {
     const x = e.offsetX;
     const y = e.offsetY;
 
-    if (cursor.isDrawing && ctx != null) {
+    if (state.cursor.isDrawing && ctx != null) {
         ctx.beginPath();
-        ctx.moveTo(cursor.x, cursor.y);
+        ctx.moveTo(state.cursor.x, state.cursor.y);
         ctx.lineTo(x, y);
         ctx.stroke();
         ctx.closePath();
-        cursor.x = x;
-        cursor.y = y;
-        currentLine?.addPoint(cursor.x, cursor.y);
-
-        const event = new CustomEvent("drawing-changed");
-        canvas.dispatchEvent(event);
-    } else if (activeSticker) {
-        activeSticker.x = x - stickerOffset.x;
-        activeSticker.y = y - stickerOffset.y;
-
-        const event = new CustomEvent("drawing-changed");
-        canvas.dispatchEvent(event);
+        state.cursor.x = x;
+        state.cursor.y = y;
+        state.currentLine?.addPoint(state.cursor.x, state.cursor.y);
+        dispatchCanvasEvent("drawing-changed");
+    } else if (state.activeSticker) {
+        state.activeSticker.x = x - state.stickerOffset.x;
+        state.activeSticker.y = y - state.stickerOffset.y;
+        dispatchCanvasEvent("drawing-changed");
     } else {
-        if (stickerPreview) {
-            stickerPreview.setPosition(x, y);
-        } else if (!toolPreview) {
-            toolPreview = new ToolPreview(x, y, thickOrThin.getThickness() / 2);
+        if (state.stickerPreview) {
+            state.stickerPreview.setPosition(x, y);
+        } else if (!state.toolPreview) {
+            state.toolPreview = new ToolPreview(x, y, thickOrThin.getThickness() / 2);
         } else {
-            toolPreview.setPosition(x, y);
-            toolPreview.setRadius(thickOrThin.getThickness() / 2);
+            state.toolPreview.setPosition(x, y);
+            state.toolPreview.setRadius(thickOrThin.getThickness() / 2);
         }
-        const event = new CustomEvent("tool-moved");
-        canvas.dispatchEvent(event);
+        dispatchCanvasEvent("tool-moved");
     }
 });
 
 canvas.addEventListener("mouseup", (_e) => {
-    cursor.isDrawing = false;
-    currentLine = null;
-    activeSticker = null;
+    state.cursor.isDrawing = false;
+    state.currentLine = null;
+    state.activeSticker = null;
 
     thickOrThin.resetToDefault();
 
-    const event = new CustomEvent("drawing-changed");
-    canvas.dispatchEvent(event);
+    dispatchCanvasEvent("drawing-changed");
 });
 
 canvas.addEventListener("drawing-changed", () => {
     if (ctx != null) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        for (const line of lines) {
-            if (line instanceof StickerPreview && line === activeSticker) {
+        for (const line of state.lines) {
+            if (line instanceof StickerPreview && line === state.activeSticker) {
                 ctx.save(); 
                 ctx.translate(line.x, line.y); 
                 line.display(ctx); 
@@ -217,24 +216,24 @@ canvas.addEventListener("drawing-changed", () => {
             }
         }
 
-        if (!cursor.isDrawing && toolPreview) {
-            toolPreview.display(ctx);
+        if (!state.cursor.isDrawing && state.toolPreview) {
+            state.toolPreview.display(ctx);
         }
     }
 });
 
 canvas.addEventListener("tool-moved", () => {
-    if (ctx != null && !cursor.isDrawing) {
+    if (ctx != null && !state.cursor.isDrawing) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        for (const line of lines) {
+        for (const line of state.lines) {
             line.display(ctx);
         }
 
-        if (stickerPreview) {
-            stickerPreview.display(ctx);
-        } else if (toolPreview) {
-            toolPreview.display(ctx);
+        if (state.stickerPreview) {
+            state.stickerPreview.display(ctx);
+        } else if (state.toolPreview) {
+            state.toolPreview.display(ctx);
         }
     }
 });
@@ -252,29 +251,26 @@ class Button {
 
 new Button("clear", () => {
     if (ctx != null) {
-        while (lines.length > 0) {
-            redoStack.push(lines.pop()!); 
+        while (state.lines.length > 0) {
+            state.redoStack.push(state.lines.pop()!); 
         }
-        const event = new CustomEvent("drawing-changed");
-        canvas.dispatchEvent(event);
+        dispatchCanvasEvent("drawing-changed");
     }
 });
 
 new Button("undo", () => {
-    const lastLine = lines.pop();
+    const lastLine = state.lines.pop();
     if (lastLine) {
-        redoStack.push(lastLine);
-        const event = new CustomEvent("drawing-changed");
-        canvas.dispatchEvent(event);
+        state.redoStack.push(lastLine);
+        dispatchCanvasEvent("drawing-changed");
     }
 });
 
 new Button("redo", () => {
-    const lastRedo = redoStack.pop();
+    const lastRedo = state.redoStack.pop();
     if (lastRedo) {
-        lines.push(lastRedo);
-        const event = new CustomEvent("drawing-changed");
-        canvas.dispatchEvent(event);
+        state.lines.push(lastRedo);
+        dispatchCanvasEvent("drawing-changed");
     }
 });
 
@@ -290,11 +286,10 @@ new Button("Custom", () => {
     }
     const customEmoji = stickers.slice(-1).pop() || "😼";
     const rotation = getRandomRotation();
-    toolPreview = null;
-    stickerPreview = new StickerPreview(cursor.x, cursor.y, customEmoji, rotation);
+    state.toolPreview = null;
+    state.stickerPreview = new StickerPreview(state.cursor.x, state.cursor.y, customEmoji, rotation);
 
-    const event = new CustomEvent("tool-moved");
-    canvas.dispatchEvent(event);
+    dispatchCanvasEvent("tool-moved");
 });
 
 new Button("Export", () => {
@@ -310,7 +305,7 @@ new Button("Export", () => {
         const scale = temp.width / canvas.width;
         tempCtx.scale(scale, scale);
 
-        for (const line of lines) {
+        for (const line of state.lines) {
             line.display(tempCtx);
         }
 
@@ -335,11 +330,10 @@ new Button("Export", () => {
 stickers.forEach((sticker) => {
     new Button(sticker, () => {
         const rotation = getRandomRotation();
-        toolPreview = null;
-        stickerPreview = new StickerPreview(cursor.x, cursor.y, sticker, rotation);
+        state.toolPreview = null;
+        state.stickerPreview = new StickerPreview(state.cursor.x, state.cursor.y, sticker, rotation);
 
-        const event = new CustomEvent("tool-moved");
-        canvas.dispatchEvent(event);
+        dispatchCanvasEvent("tool-moved");
     });
 });
 
